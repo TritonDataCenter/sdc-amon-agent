@@ -79,6 +79,7 @@ release: all deps docs $(SMF_MANIFESTS)
 	@echo "Building $(RELEASE_TARBALL)"
 	@mkdir -p $(RELSTAGEDIR)/$(NAME)
 	cp -Pr \
+		$(TOP)/main.js \
 		$(TOP)/bin \
 		$(TOP)/lib \
 		$(TOP)/node_modules \
@@ -98,7 +99,7 @@ release: all deps docs $(SMF_MANIFESTS)
 	# XXX tools/amon-agent.exclude, whittle away at install size
 	cd $(RELSTAGEDIR) && $(TAR) -I pigz -cf $(TOP)/$(RELEASE_TARBALL) *
 	cat $(TOP)/manifest.tmpl | sed \
-	    -e "s/UUID/$$(cat $(RELSTAGEDIR)/cn-agent/image_uuid)/" \
+	    -e "s/UUID/$$(cat $(RELSTAGEDIR)/$(NAME)/image_uuid)/" \
 	    -e "s/NAME/$$(json name < $(TOP)/package.json)/" \
 	    -e "s/VERSION/$$(json version < $(TOP)/package.json)/" \
 	    -e "s/DESCRIPTION/$$(json description < $(TOP)/package.json)/" \
