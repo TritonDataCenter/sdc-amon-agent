@@ -1,0 +1,26 @@
+{
+  "name": "amon-agent",
+  "description": "Triton Amon agent",
+  "version": "1.0.1",
+  "author": "Joyent (joyent.com)",
+  "private": true,
+  "dependencies": {
+    "amon-common": "git+https://github.com/joyent/node-amon-common.git#v1.0.0",
+    "amon-plugins": "git+https://github.com/joyent/node-amon-plugins.git#v1.1.0",
+    "restify": "git+https://github.com/trentm/node-restify.git#7535bb3",
+    "backoff": "2.4.0",
+    "bunyan": "0.22.1",
+    "once": "1.3.2",
+    "nopt": "2.1.1",
+    "zutil": "0.2.1"
+  },
+  "scripts": {
+    "start": "./bin/amon-agent",
+    "postinstall": "pkg/postinstall.sh",
+    "preuninstall": "pkg/preuninstall.sh"
+  },
+  "engines": {
+    "node": ">=0.8"
+  },
+  "license": "MPL-2.0"
+}
