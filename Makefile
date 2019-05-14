@@ -19,10 +19,10 @@ JS_FILES := $(shell ls *.js 2>/dev/null) \
 # doesn't know about (@@ENABLED@@)
 # SMF_MANIFESTS_IN = smf/manifests/amon-agent.xml.in
 
-NODE_PREBUILT_VERSION=v0.8.28
+NODE_PREBUILT_VERSION=v6.17.0
 NODE_PREBUILT_TAG=gz
 ifeq ($(shell uname -s),SunOS)
-	NODE_PREBUILT_IMAGE=fd2cc906-8938-11e3-beab-4359c665ac99
+	NODE_PREBUILT_IMAGE=c2c31b00-1d60-11e9-9a77-ff9f06554b0f
 endif
 
 # engbld includes
@@ -51,8 +51,6 @@ RELSTAGEDIR := /tmp/$(NAME)-$(STAMP)
 # uninstallation, so we provide a magic environment varible to disable them
 # here.
 #
-# XXX still need MAKE=$(MAKE) for dtrace-provider per sdc-amon/Makefile?
-# XXX see potential npm_config_cache thing from TOOLS-2230
 NPM_ENV =		SDC_AGENT_SKIP_LIFECYCLE=yes \
 			MAKE_OVERRIDES='CTFCONVERT=/bin/true CTFMERGE=/bin/true'
 RUN_NPM_INSTALL =	$(NPM_ENV) $(NPM) install
