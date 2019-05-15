@@ -62,7 +62,7 @@ RUN_NPM_INSTALL =	$(NPM_ENV) $(NPM) install
 all: $(SMF_MANIFESTS) | $(NPM_EXEC)
 	$(RUN_NPM_INSTALL)
 
-#XXX 'make clean' remove node_modules?
+CLEAN_FILES += node_modules package-lock.json $(NAME)-*.tgz $(NAME)-*.manifest
 DISTCLEAN_FILES += $(NAME)-*.manifest $(NAME)-*.tgz
 
 
@@ -94,7 +94,6 @@ release: all deps docs $(SMF_MANIFESTS)
 	    $(RELSTAGEDIR)/$(NAME)/build/node/include \
 	    $(RELSTAGEDIR)/$(NAME)/build/node/share
 	uuid -v4 >$(RELSTAGEDIR)/$(NAME)/image_uuid
-	# XXX tools/amon-agent.exclude, whittle away at install size
 	cd $(RELSTAGEDIR) && $(TAR) -I pigz -cf $(TOP)/$(RELEASE_TARBALL) *
 	cat $(TOP)/manifest.tmpl | sed \
 	    -e "s/UUID/$$(cat $(RELSTAGEDIR)/$(NAME)/image_uuid)/" \

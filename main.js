@@ -23,7 +23,6 @@ var path = require('path');
 
 var nopt = require('nopt');
 var bunyan = require('bunyan');
-var restify = require('restify');
 
 var App = require('./lib/app');
 
@@ -40,7 +39,7 @@ var config; // Agent configuration settings. Set in `main()`.
 var log = bunyan.createLogger({
     name: 'amon-agent',
     src: (process.platform === 'darwin'),
-    serializers: restify.bunyan.serializers
+    serializers: bunyan.stdSerializers
 });
 
 

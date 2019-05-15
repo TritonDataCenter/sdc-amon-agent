@@ -8,10 +8,10 @@
     "amon-common": "git+https://github.com/joyent/node-amon-common.git#TRITON-1666",
     "amon-plugins": "git+https://github.com/joyent/node-amon-plugins.git#TRITON-1666",
     "backoff": "2.4.0",
-    "bunyan": "0.22.1",
+    "bunyan": "1.8.12",
     "nopt": "2.1.1",
     "once": "1.3.2",
-    "restify": "git+https://github.com/trentm/node-restify.git#7535bb3"
+    "verror": "1.10.0"
   },
   "scripts": {
     "start": "./bin/amon-agent",
