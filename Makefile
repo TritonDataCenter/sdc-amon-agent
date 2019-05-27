@@ -62,7 +62,7 @@ RUN_NPM_INSTALL =	$(NPM_ENV) $(NPM) install
 all: $(SMF_MANIFESTS) | $(NPM_EXEC)
 	$(RUN_NPM_INSTALL)
 
-CLEAN_FILES += node_modules package-lock.json $(NAME)-*.tgz $(NAME)-*.manifest
+CLEAN_FILES += node_modules
 DISTCLEAN_FILES += $(NAME)-*.manifest $(NAME)-*.tgz
 
 
