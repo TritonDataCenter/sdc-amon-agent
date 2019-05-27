@@ -8,3 +8,5 @@
 /build
 /smf/manifests/*.xml
 .*.swp
+/amon-agent-*.tgz
+/amon-agent-*.manifest

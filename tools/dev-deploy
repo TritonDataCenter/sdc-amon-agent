@@ -1,0 +1,316 @@
+#!/bin/bash
+#
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+#
+
+#
+# Copyright 2019 Joyent, Inc.
+#
+
+#
+# A tool to deploy a local amon-agent tarball to a given DC for
+# *development*.
+#
+# Currently the Triton amon-agent used:
+# - in every server global zone
+# - inside many Triton and Manta VM instances
+#
+# Usage:
+#   ./tools/dev-deploy [OPTIONS] DC-HEADNODE-GZ AMON-AGENT-TARBALL
+#
+
+if [[ -n "$TRACE" ]]; then
+    export PS4='[\D{%FT%TZ}] ${BASH_SOURCE}:${LINENO}: ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
+    set -o xtrace
+fi
+set -o errexit
+set -o pipefail
+
+
+#---- globals/config
+
+SSH_OPTIONS="-q" 
+SSH="ssh $SSH_OPTIONS"
+SCP="scp $SSH_OPTIONS"
+
+#---- support stuff
+
+function fatal
+{
+    echo "$0: fatal error: $*"
+    exit 1
+}
+
+function errexit
+{
+    [[ $1 -ne 0 ]] || exit 0
+    fatal "error exit status $1"
+}
+
+function usage
+{
+    echo "Usage:"
+    echo "    $0 [-h | -s | -t | -m | -a] DC-HEADNODE-GZ AMON-AGENT-TARBALL"
+    echo
+    echo "Options:"
+    echo "    -h      Print this help and exit."
+    echo "  Target options:"
+    echo "    -g      Install amon-agent to just the headnode [g]lobal zone."
+    echo "    -s      Install amon-agent to all [s]erver global zones."
+    echo "    -t      Install amon-agent to all [T]riton VM instances."
+    echo "    -m      Install amon-agent to all [M]anta VM instances."
+    echo "    -a      Install amon-agent to [a]ll of the above."
+    echo ""
+    echo "This will install the given amon-agent tarball to the given target,"
+    echo "if any, and then will print the amon-agent SMF svc status in "
+    echo "all zones."
+}
+
+function usagefatal
+{
+    usage
+    fatal "$*"
+}
+
+function guardNotProd
+{
+    local headnode=$1
+
+    if ! $SSH $headnode 'test -f /lib/sdc/.sdc-test-no-production-data'; then
+        cat <<EOF
+To run this script you must create the following marker file on the headnode GZ
+to explicitly indicate this is not production:
+
+    /lib/sdc/.sdc-test-no-production-data
+
+EOF
+        fatal "file indicating non-production DC is missing"
+    fi
+}
+
+function scpTarballIfNecessary
+{
+    local headnode=$1
+    local tarball=$2
+    local base=$(basename $tarball)
+
+    if ! $SSH $headnode "test -f /var/tmp/amon-agent-dev-deploy/$base"; then
+        $SSH $headnode "mkdir -p /var/tmp/amon-agent-dev-deploy"
+        $SCP $tarball $headnode:/var/tmp/amon-agent-dev-deploy/$base.partial
+        $SSH $headnode "mv /var/tmp/amon-agent-dev-deploy/$base.partial /var/tmp/amon-agent-dev-deploy/$base"
+    fi
+}
+
+function cpTarballToAllServers
+{
+    local headnode=$1
+    local tarball=$2
+    local base=$(basename $tarball)
+
+    echo ""
+    echo "# copy tarball to all servers"
+    echo ""
+    $SSH $headnode "/opt/smartdc/bin/sdc-oneachnode --clobber -g /var/tmp/amon-agent-dev-deploy/$base -d /var/tmp -a"
+}
+
+function installHeadnodeGz
+{
+    local headnode=$1
+    local tarball=$2
+    local base=$(basename $tarball)
+
+    $SSH $headnode "/opt/smartdc/agents/bin/apm install /var/tmp/$base"
+}
+
+function installServers
+{
+    local headnode=$1
+    local tarball=$2
+    local base=$(basename $tarball)
+
+    echo ""
+    echo "# installing amon-agent to all server GZs"
+
+    echo ""
+    $SSH $headnode "/opt/smartdc/bin/sdc-oneachnode -J -a '/opt/smartdc/agents/bin/apm install /var/tmp/$base' | tee /var/tmp/amon-agent-dev-deploy/installServers.out | json -ga uuid hostname result.exit_status"
+    $SSH $headnode 'retval=$(json -gaf /var/tmp/amon-agent-dev-deploy/installServers.out result.exit_status | paste -sd+ | bc); exit $retval'
+}
+
+function installTriton
+{
+    local headnode=$1
+    local tarball=$2
+    local base=$(basename $tarball)
+
+    echo ""
+    echo "# installing amon-agent to all Triton core VM insts"
+
+    echo ""
+    $SSH $headnode <<SCRIPT
+    set -o errexit
+    set -o pipefail
+
+    export PATH=/opt/smartdc/bin:$PATH
+    LOG=/var/tmp/amon-agent-dev-deploy/installTriton.out
+    rm -f \$LOG
+
+    sdcadm insts type=vm -j \
+        | json -a server instance service \
+        | grep -v " nat" | grep -v " prometheus" | grep -v " grafana" \
+        | sort \
+        | while read server instance service; do
+        sdc-oneachnode -J -n \$server "
+            set -o errexit
+            set -o pipefail
+            if [[ ! -d /zones/\$instance/root/opt/amon-agent ]]; then
+                echo 'no /opt/amon-agent in \$service VM \$instance'
+                exit 0
+            fi
+            echo 'updating amon-agent in \$service VM \$instance'
+            zlogin \$instance '/opt/amon-agent/pkg/preuninstall.sh'
+            rm -rf /zones/\$instance/root/opt/amon-agent.bak
+            mv /zones/\$instance/root/opt/amon-agent /zones/\$instance/root/opt/amon-agent.bak
+            (cd /zones/\$instance/root/opt && tar xzf /var/tmp/$base)
+            zlogin \$instance '/opt/amon-agent/pkg/postinstall.sh'
+        " | tee -a \$LOG | json -ga -e 'this.first=this.result.stdout.split("\n")[0]' result.exit_status first
+    done
+SCRIPT
+
+    echo ""
+    $SSH $headnode 'retval=$(json -gaf /var/tmp/amon-agent-dev-deploy/installTriton.out result.exit_status | paste -sd+ | bc); exit $retval'
+}
+
+function installManta
+{
+    local headnode=$1
+    local tarball=$2
+    local base=$(basename $tarball)
+
+    echo ""
+    echo "# installing amon-agent to all Manta core VM insts"
+
+    echo ""
+    $SSH $headnode <<SCRIPT
+    set -o errexit
+    set -o pipefail
+
+    export PATH=/opt/smartdc/bin:$PATH
+    LOG=/var/tmp/amon-agent-dev-deploy/installManta.out
+    rm -f \$LOG
+
+    manta-adm show -Ho gz_host,zonename,service \
+        | grep -v " marlin" \
+        | sort \
+        | while read server instance service; do
+        sdc-oneachnode -J -n \$server "
+            set -o errexit
+            set -o pipefail
+            if [[ ! -d /zones/\$instance/root/opt/amon-agent ]]; then
+                echo 'no /opt/amon-agent in \$service VM \$instance'
+                exit 0
+            fi
+            echo 'updating amon-agent in \$service VM \$instance'
+            zlogin \$instance '/opt/amon-agent/pkg/preuninstall.sh'
+            rm -rf /zones/\$instance/root/opt/amon-agent.bak
+            mv /zones/\$instance/root/opt/amon-agent /zones/\$instance/root/opt/amon-agent.bak
+            (cd /zones/\$instance/root/opt && tar xzf /var/tmp/$base)
+            zlogin \$instance '/opt/amon-agent/pkg/postinstall.sh'
+        " | tee -a \$LOG | json -ga -e 'this.first=this.result.stdout.split("\n")[0]' result.exit_status first
+    done
+SCRIPT
+
+    echo ""
+    $SSH $headnode 'retval=$(json -gaf /var/tmp/amon-agent-dev-deploy/installManta.out result.exit_status | paste -sd+ | bc); exit $retval'
+}
+
+
+function amonAgentStatus
+{
+    local headnode=$1
+
+    echo ""
+    echo "# amon-agent svc status"
+    
+    $SSH $headnode '/opt/smartdc/bin/sdc-oneachnode -a "svcs -HZ amon-agent"'
+}
+
+
+#---- mainline
+
+trap 'errexit $?' EXIT
+
+optScpTarball=
+optCpTarballToAllServers=
+optInstallHeadnodeGz=
+optInstallServers=
+optInstallTriton=
+optInstallManta=
+while getopts "hgstma" opt
+do
+    case "$opt" in
+        h)
+            usage
+            exit 0
+            ;;
+        g)
+            optScpTarball=1
+            optInstallHeadnodeGz=1
+            ;;
+        s)
+            optScpTarball=1
+            optCpTarballToAllServers=1
+            optInstallServers=1
+            ;;
+        t)
+            optScpTarball=1
+            optCpTarballToAllServers=1
+            optInstallTriton=1
+            ;;
+        m)
+            optScpTarball=1
+            optInstallManta=1
+            ;;
+        a)
+            optScpTarball=1
+            optCpTarballToAllServers=1
+            optInstallServers=1
+            optInstallTriton=1
+            optInstallManta=1
+            ;;
+        *)
+            fatal "unknown option: -$opt"
+            ;;
+    esac
+done
+shift $(( $OPTIND - 1 ))
+
+headnode=$1
+[[ -n "$headnode" ]] || usagefatal "missing DC-HEADNODE-GZ argument"
+tarball=$2
+[[ -n "$tarball" ]] || usagefatal "missing AMON-AGENT-TARBALL argument"
+[[ -f "$tarball" ]] || fatal "$tarball does not exit"
+
+guardNotProd $headnode
+
+if [[ $optScpTarball == 1 ]]; then
+    scpTarballIfNecessary "$headnode" "$tarball"
+fi
+if [[ $optCpTarballToAllServers == 1 ]]; then
+    cpTarballToAllServers "$headnode" "$tarball"
+fi
+
+if [[ $optInstallHeadnodeGz == 1 ]]; then
+    installHeadnodeGz "$headnode" "$tarball"
+fi
+if [[ $optInstallServers == 1 ]]; then
+    installServers "$headnode" "$tarball"
+fi
+if [[ $optInstallTriton == 1 ]]; then
+    installTriton "$headnode" "$tarball"
+fi
+if [[ $optInstallManta == 1 ]]; then
+    installManta "$headnode" "$tarball"
+fi
+amonAgentStatus "$headnode"
