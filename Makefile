@@ -62,7 +62,7 @@ RUN_NPM_INSTALL =	$(NPM_ENV) $(NPM) install
 all: $(SMF_MANIFESTS) | $(NPM_EXEC)
 	$(RUN_NPM_INSTALL)
 
-CLEAN_FILES += node_modules
+CLEAN_FILES += node_modules npm-debug.log
 DISTCLEAN_FILES += $(NAME)-*.manifest $(NAME)-*.tgz
 
 
