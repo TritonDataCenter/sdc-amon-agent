@@ -35,9 +35,6 @@ Before commit, ensure that the following passes:
 
     make check
 
-Also see the note at the top that https://cr.joyent.us is used for code review
-for this repo.
-
 ### Releasing
 
 Changes with possible user impact should:
