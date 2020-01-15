@@ -2,6 +2,8 @@
 
 **This is an experimental repository and is not yet production-ready**
 
+*For now, the actual amon agent code used by Triton/Manta components is available at https://github.com/joyent/sdc-amon/*
+
 This repository is part of the Joyent Triton project. See the [contribution
 guidelines](https://github.com/joyent/triton/blob/master/CONTRIBUTING.md)
 and general documentation at the main
