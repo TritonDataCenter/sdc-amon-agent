@@ -1,6 +1,6 @@
 # sdc-amon-agent
 
-** This is an experimental repository and is not yet production-ready **
+*This is an experimental repository and is not yet production-ready*
 
 This repository is part of the Joyent Triton project. See the [contribution
 guidelines](https://github.com/joyent/triton/blob/master/CONTRIBUTING.md)
